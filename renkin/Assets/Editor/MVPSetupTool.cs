@@ -233,13 +233,31 @@ public class MVPSetupTool : EditorWindow
         if (oldFloor != null) DestroyImmediate(oldFloor);
 
         // 1. Floor
-        GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        floor.name = "Floor";
+        string floorSpritePath = "Assets/Art/Textures/Environment_Floor.png";
+        ImportTexture(floorSpritePath); // Use special import for tiling
+
+        GameObject floor = new GameObject("Floor");
         floor.transform.position = new Vector3(0, -1, 0);
-        floor.transform.localScale = new Vector3(20, 1, 1);
         
-        DestroyImmediate(floor.GetComponent<Collider>());
-        floor.AddComponent<BoxCollider2D>();
+        SpriteRenderer floorSr = floor.AddComponent<SpriteRenderer>();
+        Sprite floorSprite = AssetDatabase.LoadAssetAtPath<Sprite>(floorSpritePath);
+        if (floorSprite != null)
+        {
+            floorSr.sprite = floorSprite;
+            floorSr.drawMode = SpriteDrawMode.Tiled;
+            floorSr.size = new Vector2(20, 1); // 20 units wide, 1 unit high
+        }
+        else
+        {
+            // Fallback to white box if texture missing
+             floorSr.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Background.psd");
+             floorSr.drawMode = SpriteDrawMode.Tiled;
+             floorSr.size = new Vector2(20, 1);
+             floorSr.color = Color.gray;
+        }
+
+        BoxCollider2D floorCol = floor.AddComponent<BoxCollider2D>(); 
+        floorCol.size = new Vector2(20, 1); // Force size to match Sprite Tiling
         
         int groundLayer = LayerMask.NameToLayer("Ground");
         if (groundLayer != -1) floor.layer = groundLayer;
@@ -249,21 +267,22 @@ public class MVPSetupTool : EditorWindow
         string playerSpritePath = "Assets/Art/Textures/Player.png";
         string playerSideSpritePath = "Assets/Art/Textures/Player_Side.png";
         string playerRun1SpritePath = "Assets/Art/Textures/Player_Run1.png";
+        string slimeSpritePath = "Assets/Art/Textures/Enemy_Slime.png";
         
         AssetDatabase.Refresh(); // Ensure files are seen
         
         // Adjust PPU to match sizes. 
-        // Side height is 248 (PPU 150). Run height is 270.
-        // To match visual height: 270 / (248/150) = approx 163.
         ImportSprite(playerSpritePath, 512);      // Front
         ImportSprite(playerSideSpritePath, 150);  // Side
         ImportSprite(playerRun1SpritePath, 165);  // Run (Shrink to match Side)
+        ImportSprite(slimeSpritePath, 150);       // Slime (Start with 150)
 
         GameObject player = new GameObject("Player");
         SpriteRenderer sr = player.AddComponent<SpriteRenderer>();
         Sprite pSprite = AssetDatabase.LoadAssetAtPath<Sprite>(playerSpritePath);
         Sprite sSprite = AssetDatabase.LoadAssetAtPath<Sprite>(playerSideSpritePath);
         Sprite rSprite1 = AssetDatabase.LoadAssetAtPath<Sprite>(playerRun1SpritePath);
+        Sprite slimeSprite = AssetDatabase.LoadAssetAtPath<Sprite>(slimeSpritePath);
         
         if (pSprite != null) sr.sprite = pSprite;
         else 
@@ -374,6 +393,38 @@ public class MVPSetupTool : EditorWindow
             var dropField = typeof(EnemyBase).GetField("dropItem", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             // Force set Wood for testing if it's currently null or resin
             if (dropField != null) dropField.SetValue(enemy, defaultDrop);
+
+            // Assign Sprite for Slime
+            if (enemy.GetType().Name == "SlimeEnemy" && slimeSprite != null)
+            {
+                 SpriteRenderer esr = enemy.GetComponent<SpriteRenderer>();
+                 if (esr != null) esr.sprite = slimeSprite;
+            }
+            
+            // Ensure Physics Constraints & Gravity
+            Rigidbody2D erb = enemy.GetComponent<Rigidbody2D>();
+            if (erb != null)
+            {
+                erb.constraints = RigidbodyConstraints2D.FreezeRotation;
+                erb.gravityScale = 3f; // Same as player
+                erb.bodyType = RigidbodyType2D.Dynamic;
+            }
+            
+            // Ensure Collider exists
+            CircleCollider2D col = enemy.GetComponent<CircleCollider2D>();
+            if (col == null)
+            {
+                col = enemy.gameObject.AddComponent<CircleCollider2D>();
+            }
+            
+            // Adjust Collider Offset so bottom matches pivot
+            // Pivot is BottomCenter (0,0). Collider center defaults to (0,0).
+            // This makes the object 'stand' on the center of the collider, causing floating.
+            // We shift the collider UP so its bottom sits at (0,0).
+            if (col != null)
+            {
+                col.offset = new Vector2(0, col.radius);
+            }
         }
 
         Debug.Log("Enemy drops configured (Default: Wood)!");
@@ -440,6 +491,26 @@ public class MVPSetupTool : EditorWindow
         Debug.Log("Alchemy Table & Managers configured!");
         Debug.Log("TIP: If you see Input System errors, go to Edit > Project Settings > Player > Other Settings > Active Input Handling and set it to 'Both'.");
     }
+    private static void ImportTexture(string path)
+    {
+        AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+        TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (importer != null)
+        {
+            importer.textureType = TextureImporterType.Sprite;
+            TextureImporterSettings settings = new TextureImporterSettings();
+            importer.ReadTextureSettings(settings);
+
+            settings.spritePixelsPerUnit = 100; // Standard PPU
+            settings.filterMode = FilterMode.Point;
+            settings.spriteMeshType = SpriteMeshType.FullRect; // Required for Tiled
+            settings.wrapMode = TextureWrapMode.Repeat; // Required for Tiled
+            
+            importer.SetTextureSettings(settings);
+            importer.SaveAndReimport();
+        }
+    }
+
     private static void ImportSprite(string path, int ppu)
     {
         AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);

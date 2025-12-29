@@ -23,6 +23,14 @@ public abstract class EnemyBase : MonoBehaviour, IDamageable
         rb = GetComponent<Rigidbody2D>();
         currentHealth = maxHealth;
         player = GameObject.FindGameObjectWithTag("Player")?.transform;
+
+        // Force Physics Settings at Runtime to prevent floating bugs
+        if (rb != null)
+        {
+            rb.gravityScale = 3f;
+            rb.bodyType = RigidbodyType2D.Dynamic;
+            rb.constraints = RigidbodyConstraints2D.FreezeRotation;
+        }
     }
 
     public virtual void TakeDamage(int damage, Vector2 knockback)
