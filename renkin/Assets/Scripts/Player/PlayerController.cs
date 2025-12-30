@@ -36,9 +36,13 @@ public class PlayerController : MonoBehaviour
     {
         horizontalInput = Input.GetAxisRaw("Horizontal");
 
-        if (Input.GetButtonDown("Jump") && isGrounded)
+        if (Input.GetButtonDown("Jump"))
         {
-            Jump();
+            Debug.Log($"[PlayerController] Jump Input Detected. IsGrounded: {isGrounded}");
+            if (isGrounded)
+            {
+                Jump();
+            }
         }
 
         UpdateVisuals();

@@ -229,38 +229,60 @@ public class MVPSetupTool : EditorWindow
         // 0. Clean up existing objects to avoid duplication
         GameObject oldPlayer = GameObject.Find("Player");
         if (oldPlayer != null) DestroyImmediate(oldPlayer);
-        GameObject oldFloor = GameObject.Find("Floor");
-        if (oldFloor != null) DestroyImmediate(oldFloor);
+        
+        // Check for existing floor to prevent reset
+        GameObject floor = GameObject.Find("Floor");
+        bool floorExists = (floor != null);
 
         // 1. Floor
-        string floorSpritePath = "Assets/Art/Textures/Environment_Floor.png";
-        ImportTexture(floorSpritePath); // Use special import for tiling
-
-        GameObject floor = new GameObject("Floor");
-        floor.transform.position = new Vector3(0, -1, 0);
-        
-        SpriteRenderer floorSr = floor.AddComponent<SpriteRenderer>();
-        Sprite floorSprite = AssetDatabase.LoadAssetAtPath<Sprite>(floorSpritePath);
-        if (floorSprite != null)
+        int groundLayerId = LayerMask.NameToLayer("Ground");
+        if (groundLayerId == -1) 
         {
-            floorSr.sprite = floorSprite;
-            floorSr.drawMode = SpriteDrawMode.Tiled;
-            floorSr.size = new Vector2(20, 1); // 20 units wide, 1 unit high
+            groundLayerId = LayerMask.NameToLayer("Default");
+            Debug.LogWarning("Layer 'Ground' not found. Using 'Default' layer for Floor.");
+        }
+
+        if (!floorExists)
+        {
+            string floorSpritePath = "Assets/Art/Textures/Environment_Floor.png";
+            ImportTexture(floorSpritePath); // Use special import for tiling
+
+            floor = new GameObject("Floor");
+            floor.transform.position = new Vector3(0, -1, 0);
+            
+            SpriteRenderer floorSr = floor.AddComponent<SpriteRenderer>();
+            Sprite floorSprite = AssetDatabase.LoadAssetAtPath<Sprite>(floorSpritePath);
+            if (floorSprite != null)
+            {
+                floorSr.sprite = floorSprite;
+                floorSr.drawMode = SpriteDrawMode.Tiled;
+                floorSr.size = new Vector2(20, 1); // 20 units wide, 1 unit high
+            }
+            else
+            {
+                // Fallback to white box if texture missing
+                 floorSr.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Background.psd");
+                 floorSr.drawMode = SpriteDrawMode.Tiled;
+                 floorSr.size = new Vector2(20, 1);
+                 floorSr.color = Color.gray;
+            }
+
+            BoxCollider2D floorCol = floor.AddComponent<BoxCollider2D>(); 
+            floorCol.size = new Vector2(20, 1); // Force size to match Sprite Tiling
         }
         else
         {
-            // Fallback to white box if texture missing
-             floorSr.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Background.psd");
-             floorSr.drawMode = SpriteDrawMode.Tiled;
-             floorSr.size = new Vector2(20, 1);
-             floorSr.color = Color.gray;
+            Debug.Log("Existing 'Floor' object found. Skipping creation to preserve changes.");
+            // Ensure it has a collider for jumping
+            if (floor.GetComponent<Collider2D>() == null)
+            {
+                Debug.Log("Existing Floor missing Collider2D. Adding BoxCollider2D.");
+                floor.AddComponent<BoxCollider2D>();
+            }
         }
-
-        BoxCollider2D floorCol = floor.AddComponent<BoxCollider2D>(); 
-        floorCol.size = new Vector2(20, 1); // Force size to match Sprite Tiling
         
-        int groundLayer = LayerMask.NameToLayer("Ground");
-        if (groundLayer != -1) floor.layer = groundLayer;
+        // Always ensure layer is set correctly for jump to work
+        floor.layer = groundLayerId;
 
         // 2. Player
         // 2. Player
@@ -352,7 +374,8 @@ public class MVPSetupTool : EditorWindow
             if (field != null) field.SetValue(pc, gc.transform);
             
             var layerField = typeof(PlayerController).GetField("groundLayer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            if (layerField != null && groundLayer != -1) layerField.SetValue(pc, (LayerMask)(1 << groundLayer));
+            // Assign the actual layer used by the floor
+            if (layerField != null) layerField.SetValue(pc, (LayerMask)(1 << groundLayerId));
         }
 
         if (pCombat != null)
