@@ -42,7 +42,10 @@ public class ShellBeastEnemy : EnemyBase
         float dashTimer = 0;
         while (currentState == State.Dashing && dashTimer < 2.0f)
         {
-            rb.linearVelocity = dashDirection * dashSpeed;
+            if(!IsStunned)
+            {
+                rb.linearVelocity = dashDirection * dashSpeed;
+            }
             dashTimer += Time.deltaTime;
             yield return null;
         }

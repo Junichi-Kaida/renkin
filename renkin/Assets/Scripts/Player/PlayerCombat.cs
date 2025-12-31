@@ -71,15 +71,36 @@ public class PlayerCombat : MonoBehaviour
         Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(attackPoint.position, currentWeapon.attackRange, enemyLayer);
         Debug.Log($"Attack hit {hitEnemies.Length} objects on layer {enemyLayer.value}");
 
+        bool hitAny = false;
         foreach (Collider2D enemy in hitEnemies)
         {
             IDamageable damageable = enemy.GetComponent<IDamageable>();
             if (damageable != null)
             {
+                hitAny = true;
                 Vector2 knockbackDir = (enemy.transform.position - transform.position).normalized;
-                damageable.TakeDamage(currentWeapon.damage, knockbackDir * 5f);
+                
+                // ジャンプしない程度に、ほんの少しだけ浮かせて摩擦を無効化する (0.2f)
+                // これがないと地面との摩擦で一瞬で止まってしまう
+                knockbackDir.y = 0.2f; 
+                if (knockbackDir.x == 0) knockbackDir.x = (enemy.transform.position.x > transform.position.x) ? 1 : -1;
+                knockbackDir = knockbackDir.normalized;
+                
+                // 力の強さ
+                Vector2 finalKnockback = knockbackDir * 10f; 
+                damageable.TakeDamage(currentWeapon.damage, finalKnockback);
             }
         }
+
+        // --- 攻撃ヒット演出 ---
+        if (hitAny)
+        {
+            // ヒットストップ（0.1秒止まる）
+            HitStop.Freeze(0.1f);
+            // カメラシェイク（0.15秒間、強さ0.2で揺れる）
+            CameraShake.Shake(0.15f, 0.2f);
+        }
+        // --------------------
     }
 
     private System.Collections.IEnumerator AttackVisualFeedback()

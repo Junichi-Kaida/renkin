@@ -7,6 +7,9 @@ public class SlimeEnemy : EnemyBase
 
     private void FixedUpdate()
     {
+        // ノックバック中などは移動しない
+        if (IsStunned) return;
+
         if (player != null)
         {
             MoveTowardsPlayer();

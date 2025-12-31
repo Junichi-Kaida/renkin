@@ -33,21 +33,54 @@ public abstract class EnemyBase : MonoBehaviour, IDamageable
         }
     }
 
+    // --- 新しいノックバック実装 ---
+    private bool isKnockedBack;
+    // 子クラスが移動処理を行う前にこのフラグを見て、trueなら移動処理をスキップさせること
+    protected bool IsKnockedBack => isKnockedBack;
+
     public virtual void TakeDamage(int damage, Vector2 knockback)
     {
         currentHealth -= damage;
         Debug.Log($"{gameObject.name} took {damage} damage. HP: {currentHealth}");
 
-        rb.linearVelocity = Vector2.zero;
-        rb.AddForce(knockback / knockbackResistance, ForceMode2D.Impulse);
-
+        // ダメージ点滅
         StartCoroutine(DamageFlash());
+
+        // --- 強制ノックバック：Transform式 ---
+        // 物理演算（Rigidbody）が効かないため、座標を直接動かして吹き飛ばす
+        float duration = 0.25f; // 少しだけ時間を延ばす
+        
+        // 抵抗値を考慮して、飛ばす距離を計算
+        // 10fくらいの力が来たら、5.0f くらい動くように強化 ( * 0.5f )
+        Vector2 moveVector = knockback * 0.5f / knockbackResistance;
+        
+        TransformKnockback.Apply(transform, moveVector, duration);
+
+        // ノックバック中はAI移動を止めるためにスタン時間をセット
+        stunEndTime = Time.time + duration + 0.1f;
 
         if (currentHealth <= 0)
         {
             Die();
         }
     }
+
+    // IsStunned は TransformKnockback の状態も見に行く
+    protected bool IsStunned
+    {
+        get
+        {
+            if (Time.time < stunEndTime) return true;
+            // 念のため TransformKnockback コンポーネントの状態も確認
+            var tk = GetComponent<TransformKnockback>();
+            return tk != null && tk.IsKnockingBack;
+        }
+    }
+    private float stunEndTime;
+
+    // 旧PerformKnockbackは削除
+
+
 
     protected virtual IEnumerator DamageFlash()
     {
